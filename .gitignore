@@ -2,3 +2,7 @@
 .vs/
 *.log
 *.tmp
+bin/
+obj/
+.vs/
+kasd-4-semester/
