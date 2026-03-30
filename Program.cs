@@ -1,665 +1,678 @@
 ﻿using System;
 using System.Collections.Generic;
 
-//Интерфейс - пустая обертка над IComparer
-public interface TreeMapComparator<T> : IComparer<T> { }
-
-//Класс для узла дерева
-public class TreeNode<K, V>
-{
-    public K Key;
-    public V Value;
-    public TreeNode<K, V> Left;
-    public TreeNode<K, V> Right;
-    public TreeNode<K, V> Parent;
-
-    public TreeNode(K key, V value)
-    {
-        Key = key;
-        Value = value;
-        Left = null;
-        Right = null;
-        Parent = null;
-    }
-}
-
-//Реализация пары "ключ-значение"
-public class MapEntry<K, V>
-{
-    public K Key { get; set; }
-    public V Value { get; set; }
-
-    public MapEntry(K key, V value)
-    {
-        Key = key;
-        Value = value;
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (obj is MapEntry<K, V> other)
-            return EqualityComparer<K>.Default.Equals(Key, other.Key);
-        return false;
-    }
-
-    public override int GetHashCode()
-    {
-        return Key == null ? 0 : Key.GetHashCode();
-    }
-
-    public override string ToString()
-    {
-        return $"{Key} = {Value}";
-    }
-}
-
-//Основной класс MyTreeMap
 public class MyTreeMap<K, V>
 {
-    private TreeMapComparator<K> comparator;  
-    private TreeNode<K, V> root;
-    private int size;
+    private readonly IComparer<K> comparator;//Компаратор для сравнения ключей (Поле типа интерфейс) 
+    private Node root; 
+    private int size;  
 
-    //Конструктор с естественным порядком
-    public MyTreeMap()
+    //Узел дерева
+    private class Node
     {
-        //Создаем компаратор, реализующий интерфейс TreeMapComparator
-        comparator = new NaturalOrderComparator<K>();
-        root = null;
-        size = 0;
-        Console.WriteLine("  [КОНСТРУКТОР] Создано пустое дерево");
-    }
+        public K key;
+        public V value;
+        public Node left;
+        public Node right;
+        public Node parent;
 
-    //Конструктор с компаратором (используем интерфейс из задания)
-    public MyTreeMap(TreeMapComparator<K> comp)
-    {
-        comparator = comp ?? new NaturalOrderComparator<K>();
-        root = null;
-        size = 0;
-        Console.WriteLine("  [КОНСТРУКТОР] Создано пустое дерево с компаратором");
-    }
-
-    //Вспомогательный класс для естественного порядка
-    private class NaturalOrderComparator<T> : TreeMapComparator<T>
-    {
-        public int Compare(T x, T y)
+        public Node(K key, V value, Node parent)
         {
-            return Comparer<T>.Default.Compare(x, y);
+            this.key = key;
+            this.value = value;
+            this.parent = parent;
+        }
+    }
+    // Класс для пары ключ-значение
+    public class MyEntry
+    {
+        public K Key { get; }
+        public V Value { get; }
+
+        public MyEntry(K key, V value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public override string ToString()
+        {
+            return $"{Key} => {Value}";
         }
     }
 
+    // 1) Конструктор: естественный порядок
+    public MyTreeMap()
+    {
+        comparator = Comparer<K>.Default;
+        root = null;
+        size = 0;
+    }
 
+    // 2) Конструктор: с компаратором
+    public MyTreeMap(IComparer<K> comparator)
+    {
+        if (comparator == null)
+        {
+            throw new ArgumentNullException(nameof(comparator), "Компаратор не должен быть null.");
+        }
+
+        this.comparator = comparator;
+        root = null;
+        size = 0;
+    }
+
+    // 3) Очистка отображения
     public void Clear()
     {
         root = null;
         size = 0;
-        Console.WriteLine("  [CLEAR] Дерево очищено");
     }
 
-    public bool ContainsKey(K key)
+    // 4) Проверка наличия ключа
+    public bool ContainsKey(object key)
     {
-        if (key == null) throw new ArgumentNullException(nameof(key));
-        bool result = GetNode(key) != null;
-        Console.WriteLine($"  [CONTAINS KEY] Ключ '{key}' {(result ? "найден" : "не найден")}");
-        return result;
-    }
-
-    public bool ContainsValue(V value)
-    {
-        bool result = ContainsValueRecursive(root, value);
-        Console.WriteLine($"  [CONTAINS VALUE] Значение '{value}' {(result ? "найдено" : "не найдено")}");
-        return result;
-    }
-
-    private bool ContainsValueRecursive(TreeNode<K, V> node, V value)
-    {
-        if (node == null) return false;
-        if (EqualityComparer<V>.Default.Equals(node.Value, value)) return true;
-        return ContainsValueRecursive(node.Left, value) || ContainsValueRecursive(node.Right, value);
-    }
-
-    public HashSet<MapEntry<K, V>> EntrySet()
-    {
-        var set = new HashSet<MapEntry<K, V>>();
-        InOrderEntrySet(root, set);
-        Console.WriteLine($"  [ENTRY SET] Получено {set.Count} пар");
-        return set;
-    }
-    //Вспомогательный метод, обходит дерево и собирает пары в HashSet
-    private void InOrderEntrySet(TreeNode<K, V> node, HashSet<MapEntry<K, V>> set)
-    {
-        if (node == null) return;
-        InOrderEntrySet(node.Left, set);
-        set.Add(new MapEntry<K, V>(node.Key, node.Value));
-        InOrderEntrySet(node.Right, set);
-    }
-
-    public V Get(K key)
-    {
-        if (key == null) throw new ArgumentNullException(nameof(key));
-        var node = GetNode(key);
-        V result = node != null ? node.Value : default;
-        Console.WriteLine($"  [GET] По ключу '{key}' получено: {(result == null ? "null" : result.ToString())}");
-        return result;
-    }
-
-    public bool IsEmpty()
-    {
-        bool result = size == 0;
-        Console.WriteLine($"  [IS EMPTY] Дерево {(result ? "пусто" : "не пусто")}");
-        return result;
-    }
-    //Выполняет симметричный обход и собирает все ключи в HashSet 
-    public HashSet<K> KeySet()
-    {
-        var set = new HashSet<K>();
-        InOrderKeySet(root, set);
-        Console.WriteLine($"  [KEY SET] Получено {set.Count} ключей");
-        return set;
-    }
-
-    private void InOrderKeySet(TreeNode<K, V> node, HashSet<K> set)
-    {
-        if (node == null) return;
-        InOrderKeySet(node.Left, set);
-        set.Add(node.Key);
-        InOrderKeySet(node.Right, set);
-    }
-
-    public V Put(K key, V value)
-    {
-        if (key == null) throw new ArgumentNullException(nameof(key));
-        Console.WriteLine($"  [PUT] Добавление: {key} = {value}");
-
-        if (root == null)
+        if (key == null)
         {
-            root = new TreeNode<K, V>(key, value);//созд новый узнл и делаем его корнем
-            size = 1;
-            Console.WriteLine($"    - Корень: {key}");
-            return default;
+            throw new ArgumentNullException(nameof(key), "Ключ не должен быть null.");
         }
 
-        TreeNode<K, V> current = root;
-        TreeNode<K, V> parent = null;
+        if (!(key is K typedKey))
+        {
+            return false;
+        }
+
+        return FindNode(typedKey) != null;
+    }
+
+    // 5) Проверка наличия значения
+    public bool ContainsValue(object value)
+    {
+        bool found = false;
+        TraverseInOrder(root, node =>//обходим все узлы
+        {
+            if (!found)
+            {
+                if (value == null && node.value == null)
+                {
+                    found = true;
+                }
+                else if (value != null && value.Equals(node.value))//сравниваем значение
+                {
+                    found = true;
+                }
+            }
+        });
+
+        return found;
+    }
+
+    // 6) Возврат множества всех пар
+    public HashSet<MyEntry> EntrySet()
+    {
+        HashSet<MyEntry> entries = new HashSet<MyEntry>();
+        TraverseInOrder(root, node => entries.Add(new MyEntry(node.key, node.value)));
+        return entries;
+    }
+
+    // 7) Получение значения по ключу
+    public V Get(object key)
+    {
+        if (key == null)
+        {
+            throw new ArgumentNullException(nameof(key), "Ключ не должен быть null.");
+        }
+
+        if (!(key is K typedKey))
+        {
+            return default(V);
+        }
+
+        Node node = FindNode(typedKey);
+        if (node == null)
+        {
+            return default(V);
+        }
+
+        return node.value;
+    }
+
+    // 8) Проверка на пустоту
+    public bool IsEmpty()
+    {
+        return size == 0;
+    }
+
+    // 9) Возврат множества всех ключей
+    public HashSet<K> KeySet()
+    {
+        HashSet<K> keys = new HashSet<K>();
+        TraverseInOrder(root, node => keys.Add(node.key));
+        return keys;
+    }
+
+    // 10) Добавление пары ключ-значение
+    public void Put(K key, V value)
+    {
+        if (key == null)
+        {
+            throw new ArgumentNullException(nameof(key), "Ключ не должен быть null.");
+        }
+
+        if (root == null) //Проверка пустоты дерева
+        {
+            root = new Node(key, value, null); //Создаём корневой узел
+            size = 1;
+            return;
+        }
+
+        Node current = root;
+        Node parent = null;
 
         while (current != null)
         {
             parent = current;
-            int cmp = comparator.Compare(key, current.Key);
+            int comparison = CompareKeys(key, current.key);
 
-            if (cmp == 0)//ключ уже есть
+            if (comparison < 0) //если наш ключ меньше, идём налево
             {
-                V old = current.Value;
-                current.Value = value;
-                Console.WriteLine($"    - Ключ {key} уже есть, значение обновлено");
-                return old;
+                current = current.left;
             }
-            else if (cmp < 0)
-                current = current.Left;
+            else if (comparison > 0)
+            {
+                current = current.right;
+            }
             else
-                current = current.Right;
+            {
+                current.value = value;
+                return;
+            }
         }
-
-        TreeNode<K, V> newNode = new TreeNode<K, V>(key, value);//создаём новй узел
-        newNode.Parent = parent;
-
-        if (comparator.Compare(key, parent.Key) < 0)
+        //если дошли до пустого места
+        Node newNode = new Node(key, value, parent);//создаем новый узел
+        if (CompareKeys(key, parent.key) < 0)
         {
-            parent.Left = newNode;
-            Console.WriteLine($"    - Добавлен слева от {parent.Key}");
+            parent.left = newNode;
         }
         else
         {
-            parent.Right = newNode;
-            Console.WriteLine($"    - Добавлен справа от {parent.Key}");
+            parent.right = newNode;
         }
 
         size++;
-        Console.WriteLine($"    - Размер теперь: {size}");
-        return default;
     }
 
-    public V Remove(K key)
+    // 11) Удаление пары по ключу
+    public V Remove(object key)
     {
-        if (key == null) throw new ArgumentNullException(nameof(key));
-        Console.WriteLine($"  [REMOVE] Удаление ключа {key}");
-
-        var node = GetNode(key);
-        if (node == null)
+        if (key == null)
         {
-            Console.WriteLine($"    - Ключ {key} не найден");
-            return default;
+            throw new ArgumentNullException(nameof(key), "Ключ не должен быть null.");
         }
 
-        V oldValue = node.Value;
-        RemoveNode(node);
+        if (!(key is K typedKey))
+        {
+            return default(V);
+        }
+
+        Node node = FindNode(typedKey);//ищем узел с таким ключом
+        if (node == null) //не нашли
+        {
+            return default(V);
+        }
+        //нашли
+        V removedValue = node.value;
+        DeleteNode(node);
         size--;
-        Console.WriteLine($"    - Ключ {key} удален, размер теперь: {size}");
-        return oldValue;
-    }
-    //Удаление узла
-    private void RemoveNode(TreeNode<K, V> node)
-    {
-        if (node.Left == null)
-            Transplant(node, node.Right);
-        else if (node.Right == null)
-            Transplant(node, node.Left);
-        else
-        {
-            var successor = GetMinNode(node.Right);
-            if (successor.Parent != node)
-            {
-                Transplant(successor, successor.Right);
-                successor.Right = node.Right;
-                successor.Right.Parent = successor;
-            }
-            Transplant(node, successor);
-            successor.Left = node.Left;
-            successor.Left.Parent = successor;
-        }
-    }
-    //пересадка узлов при удалении
-    private void Transplant(TreeNode<K, V> u, TreeNode<K, V> v)
-    {
-        if (u.Parent == null)
-            root = v;
-        else if (u == u.Parent.Left)
-            u.Parent.Left = v;
-        else
-            u.Parent.Right = v;
-
-        if (v != null)
-            v.Parent = u.Parent;
+        return removedValue;
     }
 
+    // 12) Размер отображения
     public int Size()
     {
-        Console.WriteLine($"  [SIZE] Размер: {size}");
         return size;
     }
 
-    public K FirstKey()
+    // 13) Первый ключ
+    public K FirstKey()//самый левый
     {
-        if (root == null) throw new InvalidOperationException("Дерево пусто");
-        K result = GetMinNode(root).Key;
-        Console.WriteLine($"  [FIRST KEY] Первый ключ: {result}");
-        return result;
+        if (root == null)
+        {
+            throw new InvalidOperationException("Отображение пустое.");
+        }
+
+        Node node = GetFirstNode();
+        return node.key;
     }
 
-    public K LastKey()
+    // 14) Последний ключ
+    public K LastKey()//самое правое
     {
-        if (root == null) throw new InvalidOperationException("Дерево пусто");
-        K result = GetMaxNode(root).Key;
-        Console.WriteLine($"  [LAST KEY] Последний ключ: {result}");
-        return result;
+        if (root == null)
+        {
+            throw new InvalidOperationException("Отображение пустое.");
+        }
+
+        Node node = GetLastNode();
+        return node.key;
     }
-    //Добавляет к созданному отображение эл-ы с ключами меньше заданного
+
+    // 15) Отображение с ключами меньше end
     public MyTreeMap<K, V> HeadMap(K end)
     {
-        if (end == null) throw new ArgumentNullException(nameof(end));
-        Console.WriteLine($"  [HEAD MAP] Ключи < {end}");
-        var result = new MyTreeMap<K, V>(comparator);
-        HeadMapRecursive(root, end, result);
-        Console.WriteLine($"    - Найдено {result.Size()} элементов");
+        if (end == null)
+        {
+            throw new ArgumentNullException(nameof(end), "Граница end не должна быть null.");
+        }
+
+        MyTreeMap<K, V> result = new MyTreeMap<K, V>(comparator);
+        TraverseInOrder(root, node =>
+        {
+            if (CompareKeys(node.key, end) < 0)//проверяем каждый  ключ ктр меньше end
+            {
+                result.Put(node.key, node.value); //добавляем в новое отображение
+            }
+        });
         return result;
     }
 
-    private void HeadMapRecursive(TreeNode<K, V> node, K end, MyTreeMap<K, V> result)
-    {
-        if (node == null) return;
-        if (comparator.Compare(node.Key, end) < 0)
-        {
-            result.Put(node.Key, node.Value);
-            HeadMapRecursive(node.Left, end, result);
-            HeadMapRecursive(node.Right, end, result);
-        }
-        else
-        {
-            HeadMapRecursive(node.Left, end, result);
-        }
-    }
-
+    // 16) Отображение с ключами от start до end
     public MyTreeMap<K, V> SubMap(K start, K end)
     {
-        if (start == null || end == null) throw new ArgumentNullException();
-        if (comparator.Compare(start, end) >= 0)
-            throw new ArgumentException("start должен быть меньше end");
+        if (start == null)
+        {
+            throw new ArgumentNullException(nameof(start), "Граница start не должна быть null.");
+        }
+        if (end == null)
+        {
+            throw new ArgumentNullException(nameof(end), "Граница end не должна быть null.");
+        }
+        if (CompareKeys(start, end) > 0)
+        {
+            throw new ArgumentException("start должен быть меньше или равен end.");
+        }
 
-        Console.WriteLine($"  [SUB MAP] Ключи от {start} до {end}");
-        var result = new MyTreeMap<K, V>(comparator);
-        SubMapRecursive(root, start, end, result);
-        Console.WriteLine($"    - Найдено {result.Size()} элементов");
+        MyTreeMap<K, V> result = new MyTreeMap<K, V>(comparator);
+        TraverseInOrder(root, node =>
+        {
+            if (CompareKeys(node.key, start) >= 0 && CompareKeys(node.key, end) < 0)
+            {
+                result.Put(node.key, node.value);//доб те узлы чьи ключи попадают в диапазон
+            }
+        });
         return result;
     }
 
-    private void SubMapRecursive(TreeNode<K, V> node, K start, K end, MyTreeMap<K, V> result)
-    {
-        if (node == null) return;
-
-        int cmpStart = comparator.Compare(node.Key, start);
-        int cmpEnd = comparator.Compare(node.Key, end);
-
-        if (cmpStart >= 0 && cmpEnd < 0)
-            result.Put(node.Key, node.Value);
-
-        if (cmpStart > 0)
-            SubMapRecursive(node.Left, start, end, result);
-        if (cmpEnd < 0)
-            SubMapRecursive(node.Right, start, end, result);
-    }
-
+    // 17) Отображение с ключами больше start
     public MyTreeMap<K, V> TailMap(K start)
     {
-        if (start == null) throw new ArgumentNullException(nameof(start));
-        Console.WriteLine($"  [TAIL MAP] Ключи >= {start}");
-        var result = new MyTreeMap<K, V>(comparator);
-        TailMapRecursive(root, start, result);
-        Console.WriteLine($"    - Найдено {result.Size()} элементов");
-        return result;
-    }
-
-    private void TailMapRecursive(TreeNode<K, V> node, K start, MyTreeMap<K, V> result)
-    {
-        if (node == null) return;
-        if (comparator.Compare(node.Key, start) >= 0)
+        if (start == null)
         {
-            result.Put(node.Key, node.Value);
-            TailMapRecursive(node.Left, start, result);
-            TailMapRecursive(node.Right, start, result);
+            throw new ArgumentNullException(nameof(start), "Граница start не должна быть null.");
         }
-        else
+
+        MyTreeMap<K, V> result = new MyTreeMap<K, V>(comparator);
+        TraverseInOrder(root, node =>
         {
-            TailMapRecursive(node.Right, start, result);
+            if (CompareKeys(node.key, start) > 0)
+            {
+                result.Put(node.key, node.value);
+            }
+        });
+        return result;
+    }
+
+    // 18) Пара с ключом меньше заданного
+    public MyEntry LowerEntry(K key)
+    {
+        if (key == null)
+        {
+            throw new ArgumentNullException(nameof(key));
         }
+        //поиск узла с наибольшим ключом, меньшим заданного
+        Node node = FindLowerNode(key);
+        return node == null ? null : new MyEntry(node.key, node.value);
     }
 
-    public MapEntry<K, V> LowerEntry(K key)
+    // 19) Пара с ключом меньше или равным заданному
+    public MyEntry FloorEntry(K key)
     {
-        var node = LowerNode(key);
-        var result = node != null ? new MapEntry<K, V>(node.Key, node.Value) : null;
-        Console.WriteLine($"  [LOWER ENTRY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
+        if (key == null)
+        {
+            throw new ArgumentNullException(nameof(key));
+        }
+        Node node = FindFloorNode(key);
+        return node == null ? null : new MyEntry(node.key, node.value);
     }
 
-    public MapEntry<K, V> FloorEntry(K key)
+    // 20) Пара с ключом больше заданного
+    public MyEntry HigherEntry(K key)
     {
-        var node = FloorNode(key);
-        var result = node != null ? new MapEntry<K, V>(node.Key, node.Value) : null;
-        Console.WriteLine($"  [FLOOR ENTRY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
+        if (key == null)
+        {
+            throw new ArgumentNullException(nameof(key));
+        }
+        Node node = FindHigherNode(key);
+        return node == null ? null : new MyEntry(node.key, node.value);
     }
 
-    public MapEntry<K, V> HigherEntry(K key)
+    // 21) Пара с ключом больше или равным заданному
+    public MyEntry CeilingEntry(K key)
     {
-        var node = HigherNode(key);
-        var result = node != null ? new MapEntry<K, V>(node.Key, node.Value) : null;
-        Console.WriteLine($"  [HIGHER ENTRY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
+        if (key == null)
+        {
+            throw new ArgumentNullException(nameof(key));
+        }
+        Node node = FindCeilingNode(key);
+        return node == null ? null : new MyEntry(node.key, node.value);
     }
 
-    public MapEntry<K, V> CeilingEntry(K key)
-    {
-        var node = CeilingNode(key);
-        var result = node != null ? new MapEntry<K, V>(node.Key, node.Value) : null;
-        Console.WriteLine($"  [CEILING ENTRY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
-    }
-
+    // 22) Ключ меньше заданного
     public K LowerKey(K key)
     {
-        var node = LowerNode(key);
-        K result = node != null ? node.Key : default;
-        Console.WriteLine($"  [LOWER KEY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
+        MyEntry entry = LowerEntry(key);
+        return entry == null ? default(K) : entry.Key;
     }
 
+    // 23) Ключ меньше или равный заданному
     public K FloorKey(K key)
     {
-        var node = FloorNode(key);
-        K result = node != null ? node.Key : default;
-        Console.WriteLine($"  [FLOOR KEY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
+        MyEntry entry = FloorEntry(key);
+        return entry == null ? default(K) : entry.Key;
     }
 
+    // 24) Ключ больше заданного
     public K HigherKey(K key)
     {
-        var node = HigherNode(key);
-        K result = node != null ? node.Key : default;
-        Console.WriteLine($"  [HIGHER KEY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
+        MyEntry entry = HigherEntry(key);
+        return entry == null ? default(K) : entry.Key;
     }
 
+    // 25) Ключ больше или равный заданному
     public K CeilingKey(K key)
     {
-        var node = CeilingNode(key);
-        K result = node != null ? node.Key : default;
-        Console.WriteLine($"  [CEILING KEY] Для {key}: {(result == null ? "нет" : result.ToString())}");
-        return result;
+        MyEntry entry = CeilingEntry(key);
+        return entry == null ? default(K) : entry.Key;
     }
 
-    public MapEntry<K, V> PollFirstEntry()
+    // 26) Удаление и возврат первого элемента
+    public MyEntry PollFirstEntry()
     {
-        if (root == null)
+        Node node = GetFirstNode();//нашли самый левый узел
+        if (node == null) // если дерево пустое возвращаем нуль
         {
-            Console.WriteLine("  [POLL FIRST] Дерево пусто");
             return null;
         }
-        var min = GetMinNode(root);
-        var entry = new MapEntry<K, V>(min.Key, min.Value);
-        Console.WriteLine($"  [POLL FIRST] Удаляем первый: {entry}");
-        Remove(min.Key);
+        //создаём новую запись
+        MyEntry entry = new MyEntry(node.key, node.value);
+        DeleteNode(node);
+        size--;
         return entry;
     }
 
-    public MapEntry<K, V> PollLastEntry()
+    // 27) Удаление и возврат последнего элемента
+    public MyEntry PollLastEntry()
     {
-        if (root == null)
+        Node node = GetLastNode();
+        if (node == null)
         {
-            Console.WriteLine("  [POLL LAST] Дерево пусто");
             return null;
         }
-        var max = GetMaxNode(root);
-        var entry = new MapEntry<K, V>(max.Key, max.Value);
-        Console.WriteLine($"  [POLL LAST] Удаляем последний: {entry}");
-        Remove(max.Key);
+
+        MyEntry entry = new MyEntry(node.key, node.value);
+        DeleteNode(node);
+        size--;
         return entry;
     }
 
-    public MapEntry<K, V> FirstEntry()
+    // 28) Первый элемент без удаления
+    public MyEntry FirstEntry()
     {
-        if (root == null)
-        {
-            Console.WriteLine("  [FIRST ENTRY] Дерево пусто");
-            return null;
-        }
-        var min = GetMinNode(root);
-        var result = new MapEntry<K, V>(min.Key, min.Value);
-        Console.WriteLine($"  [FIRST ENTRY] Первый элемент: {result}");
-        return result;
+        Node node = GetFirstNode();
+        return node == null ? null : new MyEntry(node.key, node.value);
     }
 
-    public MapEntry<K, V> LastEntry()
+    // 29) Последний элемент без удаления
+    public MyEntry LastEntry()
     {
-        if (root == null)
-        {
-            Console.WriteLine("  [LAST ENTRY] Дерево пусто");
-            return null;
-        }
-        var max = GetMaxNode(root);
-        var result = new MapEntry<K, V>(max.Key, max.Value);
-        Console.WriteLine($"  [LAST ENTRY] Последний элемент: {result}");
-        return result;
+        Node node = GetLastNode();
+        return node == null ? null : new MyEntry(node.key, node.value);
     }
+
+
 
     // Вспомогательные методы
-    private TreeNode<K, V> GetNode(K key)
+    private int CompareKeys(K firstKey, K secondKey)
     {
-        var current = root;
+        return comparator.Compare(firstKey, secondKey);//вызываем компаратор (-, 0, +)
+    }
+
+    //бинарный поиск узла
+    private Node FindNode(K key)
+    {
+        Node current = root;
         while (current != null)
         {
-            int cmp = comparator.Compare(key, current.Key);
-            if (cmp == 0) return current;
-            current = cmp < 0 ? current.Left : current.Right;
+            int comparison = CompareKeys(key, current.key);
+            if (comparison < 0)
+            {
+                current = current.left;
+            }
+            else if (comparison > 0)
+            {
+                current = current.right;
+            }
+            else
+            {
+                return current;
+            }
         }
         return null;
     }
-    //Идет налево до упора
-    private TreeNode<K, V> GetMinNode(TreeNode<K, V> node)
+
+    //поиск крайних узлов
+    private Node GetFirstNode()
     {
-        while (node.Left != null) node = node.Left;
-        return node;
-    }
-    //Идет направо до упора
-    private TreeNode<K, V> GetMaxNode(TreeNode<K, V> node)
-    {
-        while (node.Right != null) node = node.Right;
-        return node;
-    }
-    //Ищет самый большой узел, ктр меньше указ ключа
-    private TreeNode<K, V> LowerNode(K key)
-    {
-        var current = root;
-        TreeNode<K, V> candidate = null;
-        while (current != null)
+        if (root == null) return null;
+        Node current = root;
+        while (current.left != null)
         {
-            if (comparator.Compare(current.Key, key) < 0)
+            current = current.left;
+        }
+        return current;
+    }
+
+    private Node GetLastNode()
+    {
+        if (root == null) return null;
+        Node current = root;
+        while (current.right != null)
+        {
+            current = current.right;
+        }
+        return current;
+    }
+
+    //Симметричный обход 
+    private void TraverseInOrder(Node node, Action<Node> action)
+    {
+        if (node == null) return;
+        TraverseInOrder(node.left, action);//рекурс обойти левое поддерево
+        action(node);//выполн действие
+        TraverseInOrder(node.right, action); //рек обойти правое поддерево
+    }
+
+    //Удаление узла
+    private void DeleteNode(Node node)
+    {
+        // 1. два потомка
+        if (node.left != null && node.right != null)
+        {
+            Node successor = node.right;//преемник
+            while (successor.left != null)
             {
-                candidate = current;
-                current = current.Right;
+                successor = successor.left;//левый узел правого поддерева
+            }
+
+            node.key = successor.key;
+            node.value = successor.value;
+            node = successor;
+        }
+
+        // 2. у node максимум один потомок
+        Node replacement = node.left ?? node.right;
+        if (replacement != null)
+        {
+            replacement.parent = node.parent;//меняем родителя 
+
+            if (node.parent == null)//удаляемый узел не имеет родителя
+            {
+                root = replacement;//корнем стал ребенок
+            }
+            else if (node == node.parent.left)//удаляемый узел левый ребенок своего родителя
+            {
+                node.parent.left = replacement;
+            }
+            else //правый ребенок
+            {
+                node.parent.right = replacement;
+            }
+        }
+        else // 3. нет потомков (лист)
+        {
+            if (node.parent == null) //узел корень дерева
+            {
+                root = null;//дерево стало пустым
+            }
+            else if (node == node.parent.left) //удаляемый узел левый ребенок
+            {
+                node.parent.left = null;
             }
             else
             {
-                current = current.Left;
+                node.parent.right = null;
+            }
+        }
+    }
+
+    // Ищет узел с самым большим ключом, меньше заданного
+    private Node FindLowerNode(K key)
+    {
+        Node current = root;
+        Node candidate = null;
+
+        while (current != null)
+        {
+            int comparison = CompareKeys(key, current.key);
+            if (comparison <= 0)//заданнный клююч >= текущ ключу
+            {
+                current = current.left;
+            }
+            else
+            {
+                candidate = current;
+                current = current.right;
             }
         }
         return candidate;
     }
-    //Меньше или равен
-    private TreeNode<K, V> FloorNode(K key)
+    // Возвращает узел с ключом, равным заданному,если = нет, действует как findLowerNode.
+    private Node FindFloorNode(K key)
     {
-        var current = root;
-        TreeNode<K, V> candidate = null;
+        Node current = root;
+        Node candidate = null;
+
         while (current != null)
         {
-            int cmp = comparator.Compare(current.Key, key);
-            if (cmp == 0) return current;
-            if (cmp < 0)
+            int comparison = CompareKeys(key, current.key);
+            if (comparison < 0)
+            {
+                current = current.left;
+            }
+            else if (comparison > 0)
             {
                 candidate = current;
-                current = current.Right;
+                current = current.right;
             }
             else
             {
-                current = current.Left;
+                return current;
             }
         }
         return candidate;
     }
-    //Строго больше 
-    private TreeNode<K, V> HigherNode(K key)
+    // Ищет узел с самым маленьким ключом, который больше заданного
+    private Node FindHigherNode(K key)
     {
-        var current = root;
-        TreeNode<K, V> candidate = null;
+        Node current = root;
+        Node candidate = null;
+
         while (current != null)
         {
-            if (comparator.Compare(current.Key, key) > 0)
+            int comparison = CompareKeys(key, current.key);
+            if (comparison < 0)
             {
                 candidate = current;
-                current = current.Left;
+                current = current.left;
             }
             else
             {
-                current = current.Right;
+                current = current.right;
             }
         }
         return candidate;
     }
-    //Больше или равен
-    private TreeNode<K, V> CeilingNode(K key)
+    // нашли узел с точно таким же ключом
+    private Node FindCeilingNode(K key)
     {
-        var current = root;
-        TreeNode<K, V> candidate = null;
+        Node current = root;
+        Node candidate = null;
+
         while (current != null)
         {
-            int cmp = comparator.Compare(current.Key, key);
-            if (cmp == 0) return current;
-            if (cmp > 0)
+            int comparison = CompareKeys(key, current.key);
+            if (comparison <= 0)
             {
                 candidate = current;
-                current = current.Left;
+                current = current.left;
             }
             else
             {
-                current = current.Right;
+                current = current.right;
             }
         }
         return candidate;
-    }
-
-    public void PrintTree()
-    {
-        Console.WriteLine("\n--- ДЕРЕВО ---");
-        if (root == null)
-        {
-            Console.WriteLine("пусто");
-        }
-        else
-        {
-            PrintNode(root, "", true);
-        }
-        Console.WriteLine("---------------\n");
-    }
-
-    private void PrintNode(TreeNode<K, V> node, string prefix, bool isLast)
-    {
-        Console.Write(prefix);
-        Console.Write(isLast ? "└─" : "├─");
-        Console.WriteLine($"{node.Key}({node.Value})");
-
-        prefix += isLast ? "  " : "| ";
-
-        var children = new List<TreeNode<K, V>>();
-        if (node.Left != null) children.Add(node.Left);
-        if (node.Right != null) children.Add(node.Right);
-
-        for (int i = 0; i < children.Count; i++)
-        {
-            PrintNode(children[i], prefix, i == children.Count - 1);
-        }
     }
 }
 
-// Тестирование
-class Program
+// Пример использования
+public static class Program
 {
-    static void Main()
+    public static void Main()
     {
-        Console.WriteLine("ТЕСТИРОВАНИЕ MyTreeMap\n");
+        MyTreeMap<int, string> map = new MyTreeMap<int, string>();
 
-        // Используем первый конструктор
-        var map = new MyTreeMap<int, string>();
-
-        // Добавление элементов
-        map.Put(50, "пятьдесят");
-        map.Put(30, "тридцать");
-        map.Put(70, "семьдесят");
+        map.Put(10, "десять");
         map.Put(20, "двадцать");
-        map.Put(40, "сорок");
-        map.Put(60, "шестьдесят");
-        map.Put(80, "восемьдесят");
-        map.PrintTree();
+        map.Put(30, "тридцать");
+        map.Put(15, "пятнадцать");
 
-        // Тестируем методы
-        Console.WriteLine($"Первый ключ: {map.FirstKey()}");
-        Console.WriteLine($"Последний ключ: {map.LastKey()}");
-        Console.WriteLine($"Размер: {map.Size()}");
+        Console.WriteLine("Размер: " + map.Size());
+        Console.WriteLine("Первый ключ: " + map.FirstKey());
+        Console.WriteLine("Последний ключ: " + map.LastKey());
+        Console.WriteLine("Значение для ключа 20: " + map.Get(20));
 
-        var first = map.FirstEntry();
-        Console.WriteLine($"Первый элемент: {first}");
+        Console.WriteLine("\nВсе записи:");
+        foreach (var entry in map.EntrySet())
+        {
+            Console.WriteLine(entry);
+        }
 
-        var polled = map.PollFirstEntry();
-        Console.WriteLine($"Удален первый: {polled}");
-        map.PrintTree();
-
+        Console.WriteLine("\nКлючи больше 15:");
+        var tailMap = map.TailMap(15);
+        foreach (var key in tailMap.KeySet())
+        {
+            Console.WriteLine(key);
+        }
     }
 }
